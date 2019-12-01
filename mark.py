@@ -8,6 +8,7 @@ Config.set('input', 'mouse', 'mouse,disable_multitouch')
 Config.set('postproc', 'double_tap_time', '400')
 Config.set('postproc', 'double_tap_distance', '20')
 
+from os.path import expanduser
 
 from getinstance import InstanceManager
 from kivy.app import App
@@ -19,15 +20,19 @@ from kivy.uix.image import Image
 from kivy.uix.scatterlayout import ScatterLayout
 from kivy.uix.stencilview import StencilView
 
+from kivy.uix.popup import Popup
+        
 from kivy.properties import NumericProperty, ObjectProperty, ListProperty
 from kivy.uix.video import Video
 from kivy.core.window import Window
 
+from kivy_garden.filebrowser import FileBrowser
 
 from hoverable import HoverBehavior
 
 
 Builder.load_string('''
+#:import FileBrowser kivy_garden.filebrowser.FileBrowser
 
 <BoxMenu>:
     orientation: 'vertical'
@@ -45,7 +50,6 @@ Builder.load_string('''
     border_width: 1
     border_opacity: 0.7
     border_color: (1,.2,.2, self.border_opacity)
-    
     on_enter: self.border_opacity = 1; self.border_width = 2
     on_leave: self.border_opacity = 0.7; self.border_width = 1
     
@@ -64,18 +68,22 @@ Builder.load_string('''
     
 <Main@BoxLayout>:
     orientation: 'vertical'
+    #z_index: 1
     
     padding: 0
     spacing: 0
+    Button:
+        text: 'открыть файл'
+        size: dp(100), dp(40)
+        size_hint_y: None
+        on_release: root.open_file()
+            
     Label:
         #z_index: 112
         height: dp(50)
         size_hint_y: None
         text: 'Двойной клик - добавить'
     
-    #Video:
-        #source: '/home/z/uik-2212-c1.ts'
-        #state: 'play'
         
     StencilLayout:
         id: stencil
@@ -87,7 +95,7 @@ Builder.load_string('''
             #do_scale: False
             auto_bring_to_front: False
             scale: 1
-            #z_index: 111
+            z_index: 111
             #size: 200,200
             #size_hint: None, None
             
@@ -97,7 +105,11 @@ Builder.load_string('''
                 #Rectangle:
                     #pos: self.pos
                     #size: self.size
-            
+                
+            MyVideo:
+                id: video
+                #source: '/home/z/uik-2212-c1.ts'
+                #state: 'play'
 
 #<MyImage>:
     #source: '05.jpg'
@@ -142,40 +154,19 @@ class Box(Label, HoverBehavior):
     scatter = ObjectProperty()
     
     def on_touch_down(self, touch):
-        #x, y = touch.x, touch.y
-        #self.prev_x = touch.x
-        #self.prev_y = touch.y
-        #print(3)
-        #if touch.is_mouse_scrolling:
-        #print(f"{self} {touch.button}")
         if touch.button == 'right' and self.collide_point(*touch.pos):
-            print(f"{self} right mouse clicked")
-            super().on_touch_down(touch)
             self.add_widget(BoxMenu(pos=touch.pos))
-            return False
-            
         return super().on_touch_down(touch)
     
 
 class StencilLayout(StencilView, BoxLayout):
+    #instances = InstanceManager()
     
-    instances = InstanceManager()
+    def on_touch_down(self, touch):
+        if self.collide_point(*touch.pos):
+            return super().on_touch_down(touch)
 
 class MyScatter(ScatterLayout):
-    
-    #def apply_transform(self, trans, post_multiply=False, anchor=(0, 0)):
-        #print(self.transform)
-        #print(self.scale)
-        #print(self.bbox)
-        #print(self.children[0].pos)
-        #if self.children[0].children:
-            #print(self.children[0].height)
-            #print(self.children[0].children[0].height)
-        #print(self.height)
-        #print('ss', StencilLayout.instances.get().height)
-        #return super().apply_transform(trans, post_multiply, anchor)
-    
-    
     def on_touch_down(self, touch):
         if touch.is_mouse_scrolling:
             if touch.button == 'scrolldown':
@@ -188,9 +179,8 @@ class MyScatter(ScatterLayout):
                     self.scale = self.scale * 0.8
         return super().on_touch_down(touch)
 
-class MyImage(Image):
+class MyVideo(Video):
     def on_touch_down(self, e): 
-        #print(f"{self} mouse clicked")
         if e.button == 'right':
             BoxMenu.instances.all().close()
             
@@ -233,24 +223,51 @@ class MyImage(Image):
         return res
 
         #ffmpeg -ss 00:03 -i part.000000.ts -vframes 1 -q:v 2 output.jpg
+        
 class Main(BoxLayout):
-    pass
+    #browser = ObjectProperty()
+    browser = None
+    
+    def open_file(self):
+        if self.browser:
+            return
+        browser = FileBrowser(
+            select_string='Открыть', cancel_string='Отмена',
+            favorites=[(expanduser('~'), 'Documents')],
+            #path='/home/z'
+        )
+        browser.bind(
+                    on_submit=self._fbrowser_success,
+                    on_success=self._fbrowser_success,
+                    on_canceled=self.close_browser)
+        self.browser = Popup(title='Выберите видео файл', content=browser)
+        self.parent.add_widget(self.browser, 0)
 
-
+    def _fbrowser_success(self, browser): 
+        if browser.selection:
+            self.ids.video.state = 'stop'
+            self.ids.video.source = browser.selection[0]
+            self.ids.video.state = 'play'
+            self.close_browser()
+        
+    def close_browser(self, *a):
+        self.parent.remove_widget(self.browser)
+        self.browser = None
+    
 class MyApp(App):
     def build(self):
         Window.maximize()
-        mainwidget = Main()
-        #mainwidget.ids.im.source='05.jpg'
-        self.ii = MyImage(source='04.jpg')
-        #self.ii.size=(640,480)
-        mainwidget.ids.scatter.add_widget(self.ii)
-        #mainwidget.ids.scatter.scale = 1
-        #mainwidget.ids.scatter.scale = float(mainwidget.ids.stencil.height) / self.ii.height
-        #print('aa', mainwidget.ids.stencil.height, self.ii.height)
-        #print(mainwidget.ids.scatter.scale )
-        return mainwidget
+        return Main()
+    
 
 if __name__ == '__main__':
-    MyApp().run()
+    #import tkinter as tk
+    #from tkinter import filedialog
 
+    #root = tk.Tk()
+    #root.withdraw()
+
+    #file_path = filedialog.askopenfilename()
+    #print(filename)
+
+    MyApp().run()

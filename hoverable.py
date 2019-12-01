@@ -35,6 +35,7 @@ class HoverBehavior(object):
         pos = args[1]
         #Next line to_widget allow to compensate for relative layout
         inside = self.collide_point(*self.to_widget(*pos))
+        #print(self.collide_point(*pos))
         if self.hovered == inside:
             #We have already done what was needed
             return
